@@ -1,7 +1,7 @@
 import unittest
 
-from main import sign_up, sign_in
-from user import User
+from auth_package.main import sign_up, sign_in
+from auth_package.user import User
 
 
 class SignUp:
