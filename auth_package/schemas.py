@@ -13,7 +13,7 @@ class UserLogIn(BaseModel):
 
 
 class NewTransaction(BaseModel):
-    sum_transaction: int
+    sum_transaction: float
     type_transaction: str
 
 
@@ -23,7 +23,7 @@ class TransactionResult(BaseModel):
 
 class BalanceResult(BaseModel):
     email: str
-    balance: int
+    balance: float
 
 
 class UserResponse(BaseModel):

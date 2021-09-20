@@ -1,50 +1,55 @@
 import hashlib
-
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import uuid4
 from datetime import datetime
-
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from . import models, schemas
+import jwt
 
 
-def get_user_by_email(db: Session, email: str):
-    return db.query(models.User).filter(models.User.email == email).first()
+async def get_user_by_email(session: AsyncSession, email: str):
+    stmt = select(models.User).where(models.User.email == email)
+    result = await session.execute(stmt)
+    return result
+    # return session.query(models.User).filter(models.User.email == email).first()
 
 
-def get_user_by_token(db: Session, token: str):
-    return db.query(models.User).filter(models.User.token == token).first()
+async def get_user_by_token(session: AsyncSession, token: str) -> models.User:
+    return await session.execute(select(models.User).filter(models.User.token == token).first())
+    # return session.query(models.User).filter(models.User.token == token).first()
 
 
-def create_user(db: Session, user: schemas.UserCreate):
-    salt = uuid4().bytes
+def create_user(session: AsyncSession, user: schemas.UserCreate):
+    salt = uuid4().hex
     db_user = models.User(email=user.email,
-                          password=hashlib.sha512(user.password.encode('utf-8') + salt).digest(),
+                          password=hashlib.sha512(user.password.encode('utf-8') + salt.encode("utf-8")).hexdigest(),
                           salt=salt,
-                          token=str(uuid4()),
-                          balance=0,
-                          registration_time=str(datetime.time))
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
+                          token=jwt.encode({"some": user.email}, salt, algorithm="HS256"),
+                          balance=0.0,
+                          registration_time=str(datetime.now()))
+    session.add(db_user)
+    # session.commit()
+    # session.refresh(db_user)
     return db_user
 
 
-def update_user(db: Session, email: str, balance: int):
-    db_user = db.query(models.User).filter(models.User.email == email).first()
+def update_user(session: AsyncSession, email: str, balance: int):
+    db_user = session.query(models.User).filter(models.User.email == email).first()
     db_user.balance = balance
-    db.commit()
+    session.commit()
     return db_user
 
 
-def get_transactions(db: Session, user_id: int):
-    return db.query(models.Transaction).filter(models.User.id == user_id).all()
+async def get_transactions(session: AsyncSession, user_id: int) -> models.Transaction:
+    return session.query(models.Transaction).filter(models.User.id == user_id).all()
 
 
-def create_transactions(db: Session, new_transactions: schemas.NewTransaction, user_id: int):
+def create_transactions(session: AsyncSession, new_transactions: schemas.NewTransaction, user_id: int):
     db_transactions = models.Transaction(user_id=user_id,
                                          sum_transaction=new_transactions.sum_transaction,
                                          type_transaction=new_transactions.type_transaction,
                                          date_and_time=str(datetime.time))
-    db.add(db_transactions)
-    db.commit()
+    session.add(db_transactions)
+    session.commit()
     return db_transactions

@@ -1,7 +1,7 @@
 import hashlib
 
 from auth_package.database import Base
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Float
 
 
 class User(Base):
@@ -11,7 +11,7 @@ class User(Base):
     password = Column(String, index=True)
     salt = Column(String, unique=True, index=True)
     token = Column(String, unique=True, index=True)
-    balance = Column(Integer, index=True)
+    balance = Column(Float, index=True)
     registration_time = Column(String, index=True)
 
     def credit(self, transaction):
@@ -28,10 +28,10 @@ class Transaction(Base):
     __tablename__ = "transactions"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, index=True)
-    sum_transaction = Column(Integer, index=True)
+    sum_transaction = Column(Float, index=True)
     type_transaction = Column(String, index=True)
     date_and_time = Column(String, index=True)
 
 
 def get_hash_password(password, salt):
-    return hashlib.sha512(password.encode('utf-8') + salt).digest()
+    return hashlib.sha512(password.encode('utf-8') + salt.encode('utf-8')).hexdigest()
