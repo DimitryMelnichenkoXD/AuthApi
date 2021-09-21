@@ -1,82 +1,74 @@
 import uvicorn
 import asyncio
 
-from fastapi import Depends, FastAPI, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import FastAPI, HTTPException
 
 from auth_package.crud import create_transactions, update_user, create_user
-from auth_package import crud, models, schemas
-from auth_package.database import init_models, get_session
+from auth_package import crud, models, schemas, database
 
 from auth_package.models import get_hash_password
 
-
-asyncio.run(init_models())
+# asyncio.run(init_models())
 app = FastAPI()
-
-
-# # Создание сесси
-# def get_db():
-#     db = SessionLocal()
-#     try:
-#         yield db
-#     finally:
-#         db.close()
 
 
 # I assume the data was validated before sending
 @app.post("/auth/sign_up")
-async def sign_up(user: schemas.UserCreate, db: AsyncSession = Depends(get_session)):
-    # db_user = await crud.get_user_by_email(db, email=user.email)
-    db_user = None
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    else:
-        db_user = create_user(db, user)
-        return schemas.UserResponse(email=db_user.email, token=db_user.token)
+async def sign_up(user: schemas.UserCreate):
+    async with database.async_session() as session:
+        db_user = await crud.get_user_by_email(session, email=user.email)
+        if db_user:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        else:
+            db_user = await create_user(session, user)
+            return schemas.UserResponse(email=db_user.email, token=db_user.token)
 
 
 @app.post("/auth/sign_in")
-async def sign_in(user: schemas.UserLogIn, db: AsyncSession = Depends(get_session)):
-    db_user = await crud.get_user_by_email(db, email=user.email)
-    if db_user is None:
-        return schemas.UserResponse(email="User is not found.", token="Null")
-    else:
-        if db_user.password == get_hash_password(user.password, db_user.salt):
-            return schemas.UserResponse(email=db_user.email, token=db_user.token)
+async def sign_in(user: schemas.UserLogIn):
+    async with database.async_session() as session:
+        db_user = await crud.get_user_by_email(session, email=user.email)
+        if db_user is None:
+            return schemas.UserResponse(email="User is not found.", token="Null")
         else:
-            return schemas.UserResponse(email=db_user.email, token="Wrong password")
+            if db_user.password == get_hash_password(user.password, db_user.salt):
+                return schemas.UserResponse(email=db_user.email, token=db_user.token)
+            else:
+                return schemas.UserResponse(email=db_user.email, token="Wrong password")
 
 
 @app.get("/wallet/get_balance/{token}")
-def get_balance(token: str, db: AsyncSession = Depends(get_session)):
-    db_user = crud.get_user_by_token(db, token=token)
-    if db_user is None:
-        return schemas.BalanceResult(email="User is not found", balance="Wrong token")
-    else:
-        return schemas.BalanceResult(email=db_user.email, balance=db_user.balance)
+async def get_balance(token: str):
+    async with database.async_session() as session:
+        db_user = await crud.get_user_by_token(session, token=token)
+        if db_user is None:
+            return schemas.BalanceResult(email="User is not found", balance="Wrong token")
+        else:
+            return schemas.BalanceResult(email=db_user.email, balance=db_user.balance)
 
 
 @app.post("/wallet/credit/{token}")
-def credit(token: str, new_transaction: schemas.NewTransaction, db: AsyncSession = Depends(get_session)):
-    db_user = crud.get_user_by_token(db, token=token)
-    if db_user is None:
-        return schemas.TransactionResult(email="User is not found", balance="Wrong token")
-    else:
-        db_user = update_user(db, db_user.email, db_user.credit(new_transaction))
-        db_transactions = create_transactions(db, new_transaction, db_user.id)
-        return schemas.TransactionResult(status="OK")
+async def credit(token: str, new_transaction: schemas.NewTransaction):
+    async with database.async_session() as session:
+        db_user = await crud.get_user_by_token(session, token=token)
+        if db_user is None:
+            return schemas.TransactionResult(email="User is not found", balance="Wrong token")
+        else:
+            db_user = await update_user(session, db_user.email, db_user.credit(new_transaction))
+            db_transactions = await create_transactions(session, new_transaction, db_user.id)
+            return schemas.TransactionResult(status="OK")
 
 
 @app.post("/wallet/debit/{token}")
-def debit(token: str, new_transaction: schemas.NewTransaction, db: AsyncSession = Depends(get_session)):
-    db_user = crud.get_user_by_token(db, token=token)
-    if db_user is None:
-        return schemas.TransactionResult(email="User is not found", balance="Wrong token")
-    else:
-        db_user = update_user(db, db_user.email, db_user.debit(new_transaction))
-        db_transactions = create_transactions(db, new_transaction, db_user.id)
-        return schemas.TransactionResult(status="OK")
+async def debit(token: str, new_transaction: schemas.NewTransaction):
+    async with database.async_session() as session:
+        db_user = await crud.get_user_by_token(session, token=token)
+        if db_user is None:
+            return schemas.TransactionResult(email="User is not found", balance="Wrong token")
+        else:
+            db_user = await update_user(session, db_user.email, db_user.debit(new_transaction))
+            db_transactions = await create_transactions(session, new_transaction, db_user.id)
+            return schemas.TransactionResult(status="OK")
 
 
 # Press the green button in the gutter to run the script.
